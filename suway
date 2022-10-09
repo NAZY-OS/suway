@@ -1,7 +1,10 @@
 #!/usr/bin/bash
 
 PID=$(ps -ef | grep -E "suway $1" | grep -v grep | head --lines=-1 | awk '{print $2}')
+parameter="$@"
+cmd_let_xhost="export DISPLAY=$DISPLAY;xauth merge ~/my-x-cookie;bash -c $parameter"
 main_programm="$1"
+
 
 function xauth_create {
 	touch ~/.Xauthority
@@ -10,7 +13,7 @@ function xauth_create {
 	xauth add ${HOST}:0 . $(xxd -l 16 -p /dev/urandom)
 	xauth extract ~/my-x-cookie $DISPLAY &> /dev/null
 	setfacl -m u:${USER}:r ~/my-x-cookie 
-	su - ${USER} -c "${cmd_let_xhost}"
+	su - ${USER} -c "${cmd_let_xhost}" || false
 }
 
 function xauth_create_sudo {
@@ -20,7 +23,7 @@ function xauth_create_sudo {
 	xauth add ${HOST}:0 . $(xxd -l 16 -p /dev/urandom)
 	xauth extract ~/my-x-cookie $DISPLAY &> /dev/null
 	setfacl -m u:${USER}:r ~/my-x-cookie 
-	sudo -E -u ${USER} ${cmd_let_xhost}
+	sudo -E -u ${USER} ${cmd_let_xhost} || false
 }
 
 function read_pass {
@@ -58,14 +61,14 @@ function read_pass {
 		
 		kill $(ps -aux |grep -v grep | grep -E "wvkbd-mobintl -L 280" | awk '{print $2}')&> /dev/null
 		stty echo
-		echo $PASSWORD | su -c "sudo printf ' ' " && break
+		echo $PASSWORD | su -c "sudo printf '\n\n*** Starting programm with suway!!\n' " && break
 	done
 }
 
 function xhost_run {
       #xhost +si:localuser:root &> /dev/null 
       
-      if test $(xauth_create "$@")
+      if test $(xauth_create)
       then
       #   xhost -si:localuser:root &> /dev/null 
          succeed
@@ -76,20 +79,21 @@ function xhost_run {
 }
 
 function sudo-env_run {
-      OUTPUT=$(sudo -E "$@" | tee /dev/tty)
+
+      OUTPUT="$(sudo -E $parameter | tee /dev/tty)"
       if test $? -eq 0
       then
          succeed
       else
-         echo $OUTPUT | grep -E 'Qt' &> /dev/null && qt_warn 
-         echo $OUTPUT | grep -E 'cannot open display:' &> /dev/null && x11_warn 
-         false
+         echo $OUTPUT | grep -E 'Qt' &> /dev/null && qt_warn
+         echo $OUTPUT | grep -E 'cannot open display:' &> /dev/null && x11_warn
+      false
       fi
 }
 
 function sudo_xhost-env_run {
       #xhost +si:localuser:root &> /dev/null 
-      if test $(xauth_create_sudo "$@")
+      if test $(xauth_create_sudo)
       then
          #xhost -si:localuser:root &> /dev/null 
          succeed
@@ -120,6 +124,7 @@ function x11_warn {
 }
 
 function ctrl_exit {
+     rm ~/.cache/suway.$PID &> /dev/null
      stty echo
      kill $(ps -aux |grep -v grep | grep -E "wvkbd-mobintl -L 280" | awk '{print $2}') &>/dev/null
      echo
@@ -151,8 +156,8 @@ export QT_QPA_PLATFORMTHEME="qt5ct"
 export QT_QPA_PLATFORM="wayland;xcb"
 export WAYLAND_DISPLAY="$(find $XDG_RUNTIME_DIR/wayland-*|grep -v '.lock')"
 
-which xhost &>/dev/null || bash -c "echo  Please intall xorg-xhost! && exit 1"
-cmd_let_xhost="export DISPLAY=$DISPLAY;xauth merge $HOME/my-x-cookie;bash -c $@"
+#which xhost &>/dev/null || bash -c "echo  Please install xorg-xhost! && exit 1"
+
 
 if [[ -z $main_programm ]] 
 then
@@ -174,12 +179,11 @@ echo
 if test $(which sudo &> /dev/null)
 then
   printf  "[))> No sudo are installed.\n\nIf you want a better runtime perfomance you should install sudo!\n\nFallback to using slower xhost localuser method!\n"
-  xhost_run $@
+  xhost_run
 fi
 
 
 read_pass
 
-sudo-env_run "$@" || sudo_xhost-env_run "$@" || xhost_run "$@"
-
+sudo-env_run || sudo_xhost-env_run || xhost_run
 
