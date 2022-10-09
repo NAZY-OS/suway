@@ -2,11 +2,12 @@
 
 PID=$(ps -ef | grep -E "suway $1" | grep -v grep | head --lines=-1 | awk '{print $2}')
 parameter="$@"
-cmd_let_xhost="$parameter"
+cmd_let_xhost="export DISPLAY=$DISPLAY;$parameter"
 main_programm="$1"
 
 
 function xauth_create {
+        export DISPLAY=$DISPLAY
 	touch ~/.Xauthority
 
 	# Generate the magic cookie with 128 bit hex encoding
@@ -17,13 +18,13 @@ function xauth_create {
 }
 
 function xauth_create_sudo {
+        export DISPLAY=$DISPLAY
 	touch ~/.Xauthority
 
 	# Generate the magic cookie with 128 bit hex encoding
 	xauth add ${HOST}:0 . $(xxd -l 16 -p /dev/urandom)
 	xauth extract ~/my-x-cookie $DISPLAY &> /dev/null
-	setfacl -m u:root:r ~/my-x-cookie 
-	export DISPLAY=$DISPLAY
+	setfacl -m u:root:r ~/my-x-cookie
 	xauth merge ~/my-x-cookie
 	sudo -E bash -c "${cmd_let_xhost}" && true || false
 }
