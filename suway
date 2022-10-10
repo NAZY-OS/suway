@@ -3,17 +3,18 @@
 PID=$(ps -ef | grep -E "suway $1" | grep -v grep | head --lines=-1 | awk '{print $2}')
 parameter="$@"
 myxcookie="${HOME}/my-x-cookie"
-cmd_let_xhost="export DISPLAY=$DISPLAY; xauth merge ${myxcookie} ;$parameter"
+export DISPLAY=$DISPLAY
+cmd_let_xhost="xauth merge ${myxcookie};env DISPLAY=$DISPLAY $parameter"
 main_programm="$1"
 
 
 function xauth_create {
         export DISPLAY=$DISPLAY
-	touch ~/.Xauthority
+	touch ${HOME}/.Xauthority
 
 	# Generate the magic cookie with 128 bit hex encoding
-	xauth add ${HOST}:0 . $(xxd -l 16 -p /dev/urandom)
-	xauth extract ${myxcookie} ${DISPLAY} &> /dev/null
+	xauth add $(uname -n)${DISPLAY} . $(xxd -l 16 -p /dev/urandom)
+	xauth extract ${myxcookie} $(uname -n)${DISPLAY} &> /dev/null
 	setfacl -m u:${USER}:r ${myxcookie}
 	xauth merge ${myxcookie} 
 	echo $PASSWORD | su -c "${cmd_let_xhost}" && true || false
@@ -21,11 +22,11 @@ function xauth_create {
 
 function xauth_create_sudo {
         export DISPLAY=${DISPLAY}
-	touch ~/.Xauthority
+	touch ${HOME}/.Xauthority
 
 	# Generate the magic cookie with 128 bit hex encoding
-	xauth add ${HOST}:0 . $(xxd -l 16 -p /dev/urandom)
-	xauth extract ${myxcookie} ${DISPLAY} &> /dev/null
+	xauth add $(uname -n):0 . $(xxd -l 16 -p /dev/urandom)
+	xauth extract ${myxcookie} $(uname -n)${DISPLAY} &> /dev/null
 	setfacl -m u:${USER}:r ${myxcookie}
 	xauth merge ${myxcookie} 
 	sudo -E bash -c "${cmd_let_xhost}" && true || false
@@ -112,6 +113,7 @@ function succeed {
      echo
      echo "[))> suway execution finished with no fails!"
      echo
+     stty echo
      exit
 }
 
@@ -129,11 +131,11 @@ function x11_warn {
 }
 
 function ctrl_exit {
-     rm ~/.cache/suway.$PID &> /dev/null
      stty echo
-     kill $(ps -aux |grep -v grep | grep -E "wvkbd-mobintl -L 280" | awk '{print $2}') &>/dev/null
+     kill $(ps -aux |grep -v grep | grep -E "wvkbd-mobintl -L 280" | awk '{print $2}') &>/dev/null || false
      echo
      echo suway closed!!
+     stty echo
      exit
 }
 
@@ -141,14 +143,30 @@ function fatal {
      echo
      echo "[))> suway execution can't fix your execution problem!"
      echo
-     echo -e " ~> Please contact the developer of the tool you wish to run with suway!\n  Ask to fix the sudo execution in Wayland-based Desktop's enviroments!!"
+     echo -e " ~> Please contact the developer of the $main_programm programm!\n  Ask to fix the sudo execution in Wayland-based Desktop's enviroments!!"
      echo
+     stty echo
      exit 1
 }
 
 function not_found {
-   printf "\n[))> Command $main_programm is not found!\n\n"
+   echo
+   echo "[))> Command $main_programm is not found!"
+   echo
+   stty echo
    exit 1
+}
+
+function missing_dependencies {
+   which xauth  &>/dev/null
+   if test $? -ne 0
+   then
+      echo
+      echo To use suway install please xorg-xauth!
+      echo
+      stty echo
+      exit
+   fi
 }
 
 #######################################################
@@ -163,11 +181,13 @@ export WAYLAND_DISPLAY="$(find $XDG_RUNTIME_DIR/wayland-*|grep -v '.lock')"
 
 #which xhost &>/dev/null || bash -c "echo  Please install xorg-xhost! && exit 1"
 
+missing_dependencies
 
 if [[ -z $main_programm ]] 
 then
    echo "[))> No programm found to run with suway!"
    echo
+   stty echo
    exit 1
 fi
 
@@ -190,5 +210,5 @@ fi
 
 read_pass
 
-sudo-env_run || sudo_xhost-env_run || xhost_run
+sudo-env_run || xhost_run
 
