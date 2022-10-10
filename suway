@@ -74,7 +74,7 @@ function read_pass {
 function xhost_run {
       #xhost +si:localuser:root &> /dev/null 
       
-      xauth_create && succeed || false
+      xauth_create && succeed || fatal
       #then
       #   xhost -si:localuser:root &> /dev/null 
       #   succeed
